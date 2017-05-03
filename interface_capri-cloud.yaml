@@ -7,11 +7,13 @@ host: capri-ws.sbb.ch
 basePath: /v1
 schemes:
   - https
+consumes:
+  - application/json
 produces:
   - application/json
 paths:
   /login-jwt:
-    post:
+    get:
       tags:
         - Login
       summary: Gibt bei erfolgreicher Anmeldung ein JWT Token für weitere Anfragen zurück
@@ -24,19 +26,20 @@ paths:
           type: string
       responses:
         200:
-          description: Erfolgreiche Anmeldung, es wird ein JWT-Token zurückgegeben
-          schema:
+          description: |
+            Erfolgreiche Anmeldung, es wird ein JWT-Token zurückgegeben.
+
+            Das JWT-Token ist 10 Stunden ab Ausstellung gültig. Danach muss ein neues Token angefordert werden.
+          schema: # TODO ist das der komplette Payload vom WSG?
             $ref: "#/definitions/JWT"
-        400:
+        400: # TODO mit WSG Vorgaben abgleichen
           description: Überprüfung der Anmeldedaten fehlgeschlagen
   /sendungen:
     get:
       tags:
         - Sendungen
-      summary: Ruft alle Sendungen des Kunden ab
-      description: Ruft alle Sendungen des Kunden mit einstellbarer Filterung & Sortierung ab.
-      produces:
-        - application/json
+      summary: Ruft alle verfügbaren Sendungen ab
+      description: Ruft alle Sendungen ab, bei denen der Requester Absender, Empfänger oder Frachtzahler ist
       parameters:
         - name: Authorization
           in: header
@@ -59,7 +62,7 @@ paths:
           schema:
             $ref: "#/definitions/Sendungen"
         204:
-            description: Abfrage konnte erfolgreich durchgeführt werden, es wurden aber **keine** Sendungen gefunden.
+            description: Es konnten keine dem Requester zugeordneten Sendungen gefunden werden.
         400:
           description: Die Anfrage konnte vom Server nicht verarbeitet werden, da sie keine korrekte Syntax beinhaltet.
         401:
@@ -70,7 +73,22 @@ paths:
           description: Es ist ein unerwarteter Fehler aufgetreten, weshalb die Anfrage nicht verarbeitet werden konnte.
         501:
           description: Eine angeforderte Funktionalität ist mit diesem Endpoint nicht möglich.
-  /sendungen/{sendungsnummer}:
+    put: # TODO aufbauen
+      tags:
+        - Sendungen
+      summary: Verändert mehrere Sendungen
+      parameters:
+        - name: Authorization
+          in: header
+          description: Ein JWT Token um die Anfrage zu authorisieren
+          required: true
+          type: string
+      responses:
+        200:
+          description: TODO
+          schema:
+            $ref: "#/definitions/Sendungen"
+  /sendungen/{sendungsnummer}: # TODO an /sendungen angleichen
     get:
       tags:
         - Sendungen
