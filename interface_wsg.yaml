@@ -1,0 +1,338 @@
+swagger: "2.0"
+info:
+  title: CAPrI Backend für Sendungsdaten von SBB Cargo AG
+  description: Das Cargo Application Programmable Interface (CAPrI) bietet verschiedene Services um Daten zu Ihren Sendungen abzurufen.
+  version: "0.1"
+host: capri-ws.sbb.ch
+basePath: /v1
+schemes:
+  - https
+produces:
+  - application/json
+paths:
+  /login-jwt:
+    post:
+      tags:
+        - Login
+      summary: Gibt bei erfolgreicher Anmeldung ein JWT Token für weitere Anfragen zurück
+      description: Es muss ein HTTP Authorization Header mit ZKK Nummer und Passwort (Base64 codiert) übergeben werden. Nach erfolgreicher Überprüfung der Anmeldedaten wird ein JWT Token zurückgegeben, dass für alle weiteren Anfragen an sonstige Services verwendet werden muss.
+      parameters:
+        - name: Authorization
+          in: header
+          description: Base64 encodierte Anmeldedaten
+          required: true
+          type: string
+      responses:
+        200:
+          description: Erfolgreiche Anmeldung, es wird ein JWT-Token zurückgegeben
+          schema:
+            $ref: "#/definitions/JWT"
+        400:
+          description: Überprüfung der Anmeldedaten fehlgeschlagen
+  /verify-jwt:
+    get:
+      tags:
+        - Login
+      summary: Dient zur Überprüfung ob ein Token noch gültig ist.
+      description: |
+        Das im Authorization Header übergebene Token wird daraufhin überprüft, ob es immer noch gültig ist. Der Service liefert bei vorhandenem Token immer einen 200 Returncode, bei gültigem Token enthält der Payload aber Subject & Rollen.
+      parameters:
+        - name: Authorization
+          in: header
+          description: Das zu überprüfende JWT Token
+          required: true
+          type: string
+      responses:
+        200:
+          description: |
+            Ein immer noch gültiges Token liefert folgenden Payload
+            ~~~
+            {
+              "valid": true,
+              "subject": "45021726",
+              "roles": [
+              "jwt-dummy-role"
+              ]
+            }
+            ~~~
+            Falls das Token ungültig ist, sieht der Payload wie folgt aus:
+            ~~~
+            {
+              "valid": false,
+            }
+            ~~~
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/JWT-Validation"
+        500:
+          description: |
+            Fehlercode 500 wird generiert, wenn im Authorization Header etwas anderes als das JWT Token mitgegeben wurde.
+  /sendungen:
+    get:
+      tags:
+        - Sendungen abrufen
+      summary: Ruft alle Sendungen des Kunden ab
+      description: Ruft alle Sendungen des Kunden mit einstellbarer Filterung & Sortierung ab.
+      produces:
+        - application/json
+      parameters:
+        - name: Authorization
+          in: header
+          description: Ein JWT Token um die Anfrage zu authorisieren
+          required: true
+          type: string
+        - name: filter
+          in: query
+          description: Mit diesem Parameter kann die Liste der Sendungen auf bestimmte Eigenschaften eingegrenzt werden. Ohne "-" werden Sendungen mit vorhandener Eigenschaft gesucht (z.B. Check-In durchgeführt).
+          type: array
+          uniqueItems: true
+          minItems: 1
+          collectionFormat: csv
+          items:
+            type: string
+            pattern: "[-]?(checkIn)"
+      responses:
+        200:
+          description: Abfrage erfolgreich, es wurden eine oder mehrere Sendungen gefunden
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/Sendung"
+        204:
+            description: Abfrage konnte erfolgreich durchgeführt werden, es wurden aber **keine** Sendungen gefunden.
+        400:
+          description: Die Anfrage konnte vom Server nicht verarbeitet werden, da sie keine korrekte Syntax beinhaltet.
+        401:
+          description: Unauthorisierter Zugriff, Token fehlt
+        403:
+          description: Zugriff verboten, der User darf die Schnittstelle nicht benutzen
+        500:
+          description: Es ist ein unerwarteter Fehler aufgetreten, weshalb die Anfrage nicht verarbeitet werden konnte.
+        501:
+          description: Eine angeforderte Funktionalität ist mit diesem Endpoint nicht möglich.
+  /sendungen/{sendungsnummer}:
+    get:
+      tags:
+        - Sendung
+      summary: Ruft Sendungsdaten zu einer einzelnen Sendung ab.
+      description: Wird eine Sendungsnummer als Teil der URI übergeben, werden nur Sendungsdaten zu der *einzelnen* Sendung zurückgegeben (falls die Sendungsnummer vorhanden ist).
+      parameters:
+        - name: sendungsnummer
+          in: path
+          description: Gibt die Sendungsdaten zu einer spezifischen Sendungsnummer zurück
+          required: true
+          type: integer
+          format: int32
+        - name: Authorization
+          in: header
+          description: Ein JWT Token um die Anfrage zu authorisieren
+          required: true
+          type: string
+      responses:
+        200:
+          description: Abfrage erfolgreich, die Sendung wurde gefunden
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/Sendung"
+        204:
+            description: Abfrage konnte erfolgreich durchgeführt werden, es wurde aber **keine** Sendung gefunden.
+        400:
+          description: Die Anfrage konnte vom Server nicht verarbeitet werden, da sie keine korrekte Syntax beinhaltet.
+        401:
+          description: Unauthorisierter Zugriff, Token fehlt
+        403:
+          description: Zugriff verboten, der User darf die Schnittstelle nicht benutzen
+        500:
+          description: Es ist ein unerwarteter Fehler aufgetreten, weshalb die Anfrage nicht verarbeitet werden konnte.
+        501:
+          description: Eine angeforderte Funktionalität ist mit diesem Endpoint nicht möglich.
+definitions:
+  Sendung:
+    properties:
+      nummer:
+        type: integer
+        format: int32
+        description: Eindeutige Identifikation der Sendung
+        pattern: "[0-9]{9}"
+      meldungsAbsender:
+        $ref: "#/definitions/Partner"
+      absender:
+        $ref: "#/definitions/Partner"
+      absenderReferenz:
+        type: string
+        description: Eine optionaler, individueller Text vom Absender
+      versandBahnhof:
+        $ref: "#/definitions/Bahnhof"
+      versandLadestelle:
+        $ref: "#/definitions/Ladestelle"
+      empfangsBahnhof:
+        $ref: "#/definitions/Bahnhof"
+      empfangsLadestelle:
+        $ref: "#/definitions/Ladestelle"
+      empfaenger:
+        $ref: "#/definitions/Partner"
+      empfaengerHinweis:
+        type: string
+        description: Eine optionaler, individueller Text für den Empfänger
+      versandBZF:
+        $ref: "#/definitions/Bedienzeitfenster"
+      empfangBZF:
+        $ref: "#/definitions/Bedienzeitfenster"
+      checkInMoeglich:
+        description: Gibt an, ob ein Check-In auf der Sendung vorgehommen werden kann
+        type: boolean
+      checkInErfolgt:
+        description: Gibt an, ob die Sendung eingecheckt wurde
+        type: boolean
+      wagen:
+        $ref: "#/definitions/Wagen"
+      ware:
+        $ref: "#/definitions/Ware"
+    example:
+      nummer: 312465879
+      absenderReferenz: Sendung Gate 4 für So
+      empfaengerHinweis: drittes Gleis aufstellen
+      checkInMoeglich: true
+      checkInErfolgt: false
+  Partner:
+    properties:
+      nummer:
+        description: Die ZKK Nummer des Partners
+        type: integer
+        format: int32
+        pattern: "[0-9]*"
+      name:
+        description: Der Name des Partners
+        type: string
+      ort:
+        description: Die Ortschaft des Partners
+    example:
+      nummer: 4564613256
+      name: Genossenschaft Migros Aare
+      ort: Schönbühl
+  Bahnhof:
+    properties:
+      laenderCode:
+        description: Der Ländercode des Bahnhofs
+        type: integer
+        format: int32
+        pattern: "[0-9]{4}"
+      bahnhofCode:
+        description: Kommerzieller Bahnhofscode
+        type: integer
+        format: int32
+        pattern: "[0-9]{6}"
+      bahnhofKurz:
+        description: Offizielles Kürzel des Bahnhofnamens
+        type: string
+        pattern: "[a-zA-Z]{0,5}"
+      bahnhofName:
+        description: Bahnhofsname
+        type: string
+    example:
+      laenderCode: 0085
+      bahnhofCode: 080010
+      bahnhofKurz: SCHB
+      bahnhofName: Schönbühl
+  Ladestelle:
+    properties:
+      nummer:
+        description: Ladestellennummer
+        type: integer
+        format: int32
+        pattern: "[0-9]{1,2}"
+      name:
+        description: Bezeichnung der Ladestelle
+        type: string
+    example:
+      nummer: 01
+      name: FVL
+  Bedienzeitfenster:
+    properties:
+      begin:
+        description: Startzeit des Bedienzeitfensters
+        type: string
+        format: date-time
+      ende:
+        description: Endzeitpunkt des Bedienzeitfenster
+        type: string
+        format: date-time
+    example:
+      begin: "2017-04-05T09:15:55.1295332Z"
+      ende: "2016-02-07T12:05:00Z"
+  Wagen:
+    properties:
+      nummer:
+        description: Die Wagennummer als reine Zahl
+        type: integer
+        format: int32
+        pattern: "[0-9]+"
+    example:
+      nummer: 456478961324
+  Ware:
+    properties:
+      nummer:
+        description: Der NHM Warencode
+        type: integer
+        format: int32
+        pattern: "[0-9]{6}"
+      bezeichnung:
+        description: Die Warenbezeichnung in Prosa
+        type: string
+      gewicht:
+        description: Das effektive Gewicht der Ware in kg
+        type: integer
+        format: int32
+      gewichtFrachtpflichtig:
+        description: Das frachtpflichtige Gewicht der Ware in kg
+        type: integer
+        format: int32
+      container:
+        $ref: "#/definitions/Container"
+    example:
+      nummer: 998020
+      bezeichnung: Leer Kisten Typs H ohne Gut
+      gewicht: 4800
+      gewichtFrachtpflichtig: 5000
+  Container:
+    properties:
+      nummer:
+        description: Die Containernummer
+        type: integer
+        format: int32
+        pattern: "[0-9a-zA-Z]+"
+      gewicht:
+        description: Leergewicht des Containers in kg
+        type: integer
+        format: int32
+        pattern: "[0-9]+"
+    example:
+      nummer: HGBD4567892
+      gewicht: 1500
+  JWT:
+    properties:
+      token:
+        description: Das JSON Web Token, bestehend aus Header, Payload und Signature jeweils Base64 encodiert und per "." verbunden
+        type: string
+        pattern: "[a-zA-Z0-9]+.[a-zA-Z0-9]+.[a-zA-Z0-9]+"
+    example:
+      token: "jvjSKLAJREOIUERd2313.987jlkjrew213.sdjalKJLKAasdsSN23450"
+  JWT-Validation:
+    properties:
+      valid:
+        description: Gibt an, ob das zu überprüfende Token immer noch gültig ist.
+        type: boolean
+      subject:
+        description: Der User auf den das eingereichte Token ausgegeben wurde
+        type: string
+      roles:
+        description: Die Rollen des Users auf den das eingereichte Token ausgegeben wurde
+        type: array
+        items:
+          type: string
+    example:
+      valid: true
+      subject: 216782364
+      roles: {"Admin", "Werkstattmeister"}
